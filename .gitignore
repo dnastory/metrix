@@ -1,0 +1,21 @@
+# Python
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+*.pyz
+*.pyw
+
+# Virtual Environments
+venv/
+env/
+.venv/
+.penv/
+pipenv/
+
+# Dependencies
+/.idea/
+/.vscode/
+.DS_Store
+
+# Data
