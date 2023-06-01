@@ -54,9 +54,11 @@ CREATE TABLE observedphenotypes (
 CREATE TABLE snpediametadata (
     rs_id TEXT PRIMARY KEY REFERENCES snps(rs_id),
     gene TEXT,
+    chromosome TEXT,
     position INT,
     orientation TEXT,
     reference TEXT,
+    genotype TEXT,
     magnitude REAL,
     color TEXT,
     summary TEXT,
