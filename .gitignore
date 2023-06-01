@@ -19,3 +19,9 @@ pipenv/
 .DS_Store
 
 # Data
+
+# Passwords
+/scripts/db_config.txt
+
+# Errors
+/scripts/error_log.txt
