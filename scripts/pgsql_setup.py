@@ -1,5 +1,6 @@
 import os
 import psycopg2
+import psycopg2.extras
 import csv
 from datetime import datetime
 
@@ -61,36 +62,72 @@ def get_or_create_file_id(user_id, filename, cur):
 
     return result[0]
 
+def write_checkpoint(filename, line_number):
+    with open('checkpoint.txt', 'w') as f:
+        f.write(f'{filename}\n{line_number}')
+
+def read_checkpoint():
+    try:
+        with open('checkpoint.txt', 'r') as f:
+            filename = f.readline().strip()
+            line_number = int(f.readline().strip())
+            return filename, line_number
+    except FileNotFoundError:
+        return None, None
+
 def parse_txt(txt_file, user_id, file_id, cur):
+    last_checkpoint_filename, last_checkpoint_line = read_checkpoint()
+    resume = last_checkpoint_filename is None or last_checkpoint_filename != txt_file
+
     with open(txt_file, 'r') as f:
         vcf_reader = csv.reader(f, delimiter='\t')
 
+        snp_records = []
+        usersnp_records = []
+
         for i, rec in enumerate(vcf_reader):
-            if rec[0].startswith('#'):
+            if rec[0].startswith('#') or not resume:
                 continue
 
-            try:
-                # Insert the SNP into the SNPs table
-                cur.execute(
-                    """
-                    INSERT INTO snps (rs_id, chromosome_number, position, reference, alternate, qual, filter, info, format)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT DO NOTHING
-                    """,
-                    (rec[2], rec[0], rec[1], rec[3], rec[4], rec[5], rec[6], rec[7], rec[8])
-                )
+            if i == last_checkpoint_line:
+                resume = True
 
-                # Insert the UserSNP into the UserSNPs table
-                cur.execute(                    
-                    """
-                    INSERT INTO usersnps (user_id, file_id, rs_id, genotype)
-                    VALUES (%s, %s, %s, %s)
-                    """,
-                    (user_id, file_id, rec[2], rec[9])
-                )
+            snp_records.append((rec[2], rec[0], rec[1], rec[3], rec[4], rec[5], rec[6], rec[7], rec[8]))
+            usersnp_records.append((user_id, file_id, rec[2], rec[9]))
 
-            except Exception as e:
-                print(f"Error inserting SNP {rec[2]} from file {txt_file}: {e}\n")
+            if i % 1000 == 0:  # To adjust for batch insertion
+                try:
+                    psycopg2.extras.execute_values(
+                        cur,
+                        """
+                        INSERT INTO snps (rs_id, chromosome_number, position, reference, alternate, qual, filter, info, format)
+                        VALUES %s
+                        ON CONFLICT (rs_id) DO NOTHING
+                        """,
+                        snp_records
+                    )
+
+                    psycopg2.extras.execute_values(
+                        cur,
+                        """
+                        INSERT INTO usersnps (user_id, file_id, rs_id, genotype)
+                        VALUES %s
+                        ON CONFLICT (user_id, file_id, rs_id) DO NOTHING
+                        """,
+                        usersnp_records
+                    )
+
+                    snp_records.clear()
+                    usersnp_records.clear()
+
+                    write_checkpoint(txt_file, i)
+
+                except Exception as e:
+                    print(f"Error inserting SNP{rec[2]} from file {txt_file}: {e}\n")
+                    conn.rollback()
+        conn.commit()
+
+
 
 def process_file(filename, vcf_dir, cur):
     if filename.endswith('.txt'):
@@ -114,9 +151,8 @@ def process_files_in_directory(vcf_dir, cur):
     for filename in files:
         if process_file(filename, vcf_dir, cur):
             processed_files += 1
-            if processed_files % 1 == 0:
-                print(f"Processed {processed_files} out of {file_count} files.")
-                print_database_sizes(cur)
+            print(f"Processed {processed_files} out of {file_count} files.")
+            print_database_sizes(cur)
 
 
 if __name__ == "__main__":

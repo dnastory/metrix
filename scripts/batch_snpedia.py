@@ -10,6 +10,18 @@ with open('./db_config.txt', 'r') as f:
 conn_pg = None
 conn_sqlite = None
 
+def read_checkpoint():
+    try:
+        with open('snpedia_checkpoint.txt', 'r') as f:
+            rs_id = f.readline().strip()
+            return rs_id
+    except FileNotFoundError:
+        return None
+
+def write_checkpoint(rs_id):
+    with open('snpedia_checkpoint.txt', 'w') as f:
+        f.write(f'{rs_id}\n')
+
 try:
     conn_pg = psycopg2.connect(
         dbname=db_name,
@@ -20,15 +32,10 @@ try:
     )
     cur_pg = conn_pg.cursor()
 
-    # TMP: modify the snpediametadata table to include chromosome and genotype fields	
-    cur_pg.execute("ALTER TABLE snpediametadata ADD COLUMN IF NOT EXISTS chromosome TEXT, ADD COLUMN IF NOT EXISTS genotype TEXT;")	
-    conn_pg.commit()
-
-
     conn_sqlite = sqlite3.connect('/home/ec2-user/.local/share/snpediator/snpediator_local.db')
     cur_sqlite = conn_sqlite.cursor()
 
-    cur_pg.execute("SELECT rs_id FROM snp")
+    cur_pg.execute("SELECT rs_id FROM snps ORDER BY rs_id")
     snps = cur_pg.fetchall()
 
     insert_sql = sql.SQL(
@@ -48,19 +55,41 @@ try:
         """
     )
 
+    last_checkpoint = read_checkpoint()
+    resume = last_checkpoint is None
+
     for rs_id, in snps:
+        if not resume:
+            if rs_id == last_checkpoint:
+                resume = True
+            continue
+
         cur_sqlite.execute("SELECT rsid, gene, chromosome, position, orientation, reference, genotype, magnitude, color, summary FROM columns_db WHERE rsid = ?", (rs_id,))
         rsid_columns = cur_sqlite.fetchone()
 
         if rsid_columns is None:
             continue
 
-        cur_pg.execute(insert_sql, rsid_columns)
+        try:
+            cur_pg.execute(insert_sql, rsid_columns)
+            conn_pg.commit()
+            write_checkpoint(rs_id)
+        except psycopg2.IntegrityError as e:
+            print(f"Integrity error on rs_id {rs_id}: {e}")
+            conn_pg.rollback()
+        except psycopg2.DatabaseError as e:
+            print(f"Database error on rs_id {rs_id}: {e}")
+            conn_pg.rollback()
+        except Exception as e:
+            print(f"Unknown error on rs_id {rs_id}: {e}")
+            conn_pg.rollback()
 
-    conn_pg.commit()
-
+except psycopg2.OperationalError as e:
+    print(f"Could not connect to PostgreSQL database: {e}")
+except sqlite3.OperationalError as e:
+    print(f"Could not connect to SQLite database: {e}")
 except Exception as e:
-    print(f"An error occurred: {e}")
+    print(f"An unknown error occurred: {e}")
 finally:
     if cur_pg is not None:
         cur_pg.close()

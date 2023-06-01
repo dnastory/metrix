@@ -28,3 +28,8 @@ pipenv/
 
 # Errors
 /scripts/error_log.txt
+
+# Logs
+snpediator.log
+/scripts/*checkpoint.txt
+
