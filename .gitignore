@@ -12,6 +12,8 @@ env/
 .venv/
 .penv/
 pipenv/
+**/.env
+
 
 # Dependencies
 /.idea/
