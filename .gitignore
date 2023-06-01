@@ -21,6 +21,7 @@ pipenv/
 .DS_Store
 
 # Data
+/data/SNPedia
 
 # Passwords
 /scripts/db_config.txt
