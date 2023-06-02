@@ -24,6 +24,7 @@ pipenv/
 /data/SNPedia
 /data/snp_database_backup_*.sql
 /data/snpedia_database_backup_*.db
+/scripts/sanity-check/data
 
 # Passwords
 /scripts/db_config.txt

@@ -1,7 +1,7 @@
 import psycopg2
 import pandas as pd
 
-with open('./db_config.txt', 'r') as f:
+with open('../db_config.txt', 'r') as f:
     db_config = [line.strip() for line in f.readlines()]
     db_name, db_user, db_password, db_host, db_port = db_config
 

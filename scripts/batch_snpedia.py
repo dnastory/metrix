@@ -2,6 +2,7 @@ import psycopg2
 import sqlite3
 import logging
 import sys
+import time
 
 logging.basicConfig(filename='batch_snpedia.log', level=logging.INFO)
 
@@ -14,13 +15,24 @@ def get_db_config():
 
 def batch_update(cur_pg, data_batch):
     try:
-        update_sql = """INSERT INTO snpediametadata(id, rs_id, gene, "position", orientation, reference, genotype, magnitude, color, summary, chromosome) 
-                        VALUES (DEFAULT, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);"""
+        update_sql = """
+        INSERT INTO snpediametadata(id, rs_id, gene, "position", orientation, reference, genotype, magnitude, color, summary, chromosome) 
+        VALUES (DEFAULT, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT DO NOTHING;
+        """
         cur_pg.executemany(update_sql, data_batch)
     except Exception as e:
         cur_pg.execute("ROLLBACK")
         logging.error(f'Error updating PostgreSQL: {e}')
         raise e
+
+
+
+def count_snpediametadata(cur_pg):
+    cur_pg.execute("SELECT COUNT(*) FROM snpediametadata;")
+    count = cur_pg.fetchone()[0]
+    print(f'Count of snpediametadata: {count}')
+
 
 def process_snpedia_data():
     db_config = get_db_config()
@@ -84,6 +96,8 @@ def process_snpedia_data():
         except Exception as e:
             logging.error(f'Error updating PostgreSQL: {e}')
 
+    count_snpediametadata(cur_pg)
+
     cur_pg.close()
     conn_pg.close()
     cur_sqlite.close()
@@ -91,4 +105,6 @@ def process_snpedia_data():
 
 
 if __name__ == "__main__":
-    process_snpedia_data()
+    while True:
+        process_snpedia_data()
+        time.sleep(1800)  # sleep for half an hour
