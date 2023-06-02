@@ -299,6 +299,14 @@ ALTER TABLE ONLY public.snpediametadata
 
 
 --
+-- Name: snpediametadata snpediametadata_unique; Type: CONSTRAINT; Schema: public; Owner: olivia
+--
+
+ALTER TABLE ONLY public.snpediametadata
+    ADD CONSTRAINT snpediametadata_unique UNIQUE (rs_id, gene, "position", orientation, reference, magnitude, color, summary, chromosome, genotype, id);
+
+
+--
 -- Name: snps snps_pkey; Type: CONSTRAINT; Schema: public; Owner: olivia
 --
 
