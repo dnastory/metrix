@@ -124,11 +124,34 @@ CREATE TABLE public.snpediametadata (
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     chromosome text,
-    genotype text
+    genotype text NOT NULL,
+    id integer NOT NULL
 );
 
 
 ALTER TABLE public.snpediametadata OWNER TO olivia;
+
+--
+-- Name: snpediametadata_id_seq; Type: SEQUENCE; Schema: public; Owner: olivia
+--
+
+CREATE SEQUENCE public.snpediametadata_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.snpediametadata_id_seq OWNER TO olivia;
+
+--
+-- Name: snpediametadata_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: olivia
+--
+
+ALTER SEQUENCE public.snpediametadata_id_seq OWNED BY public.snpediametadata.id;
+
 
 --
 -- Name: snps; Type: TABLE; Schema: public; Owner: olivia
@@ -222,6 +245,13 @@ ALTER TABLE ONLY public.observedphenotypes ALTER COLUMN observed_phenotype_id SE
 
 
 --
+-- Name: snpediametadata id; Type: DEFAULT; Schema: public; Owner: olivia
+--
+
+ALTER TABLE ONLY public.snpediametadata ALTER COLUMN id SET DEFAULT nextval('public.snpediametadata_id_seq'::regclass);
+
+
+--
 -- Name: usersnps user_snp_id; Type: DEFAULT; Schema: public; Owner: olivia
 --
 
@@ -265,7 +295,7 @@ ALTER TABLE ONLY public.processed_snps
 --
 
 ALTER TABLE ONLY public.snpediametadata
-    ADD CONSTRAINT snpediametadata_pkey PRIMARY KEY (rs_id);
+    ADD CONSTRAINT snpediametadata_pkey PRIMARY KEY (id);
 
 
 --

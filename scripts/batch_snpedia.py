@@ -1,30 +1,30 @@
-import sqlite3
 import psycopg2
+import sqlite3
 import logging
-from psycopg2 import sql
+import sys
 
-logging.basicConfig(filename='batch_snpedia.log', level=logging.DEBUG, format='%(asctime)s %(message)s')
+logging.basicConfig(filename='batch_snpedia.log', level=logging.INFO)
 
-def batch_update(cur, batch):
-    insert = sql.SQL(''' 
-        INSERT INTO snpediametadata 
-        (rs_id, gene, "position", orientation, reference, magnitude, color, summary, chromosome, genotype) 
-        VALUES {} 
-        ON CONFLICT (rs_id) DO UPDATE SET
-        gene = EXCLUDED.gene,
-        "position" = EXCLUDED."position",
-        orientation = EXCLUDED.orientation,
-        reference = EXCLUDED.reference,
-        magnitude = EXCLUDED.magnitude,
-        color = EXCLUDED.color,
-        summary = EXCLUDED.summary,
-        chromosome = EXCLUDED.chromosome,
-        genotype = EXCLUDED.genotype
-        ''').format(sql.SQL(',').join(map(sql.Literal, batch)))
-    cur.execute(insert)
+
+def get_db_config():
+    with open('./db_config.txt', 'r') as f:
+        db_config = [line.strip() for line in f.readlines()]
+        return db_config
+
+
+def batch_update(cur_pg, data_batch):
+    try:
+        update_sql = """INSERT INTO snpediametadata(id, rs_id, gene, "position", orientation, reference, genotype, magnitude, color, summary, chromosome) 
+                        VALUES (DEFAULT, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);"""
+        cur_pg.executemany(update_sql, data_batch)
+    except Exception as e:
+        cur_pg.execute("ROLLBACK")
+        logging.error(f'Error updating PostgreSQL: {e}')
+        raise e
 
 def process_snpedia_data():
-    conn_pg = psycopg2.connect(database="snp_database", user="olivia", password="olivia")
+    db_config = get_db_config()
+    conn_pg = psycopg2.connect(database=db_config[0], user=db_config[1], password=db_config[2])
     cur_pg = conn_pg.cursor()
 
     conn_sqlite = sqlite3.connect('/home/ec2-user/.local/share/snpediator/snpediator_local.db')
@@ -32,76 +32,63 @@ def process_snpedia_data():
 
     logging.info('SQLite connection status: ' + ('open' if conn_sqlite else 'closed'))
 
-    logging.info('Fetching unprocessed snps...')
-    cur_pg.execute("""
-        SELECT snps.rs_id 
-        FROM snps
-        LEFT JOIN processed_snps 
-        ON snps.rs_id = processed_snps.rs_id
-        WHERE processed_snps.rs_id IS NULL
-    """)
-    snps = cur_pg.fetchall()
-    logging.info(f'{len(snps)} unprocessed SNPs fetched.')
+    logging.info('Fetching rs_ids from PostgreSQL...')
+    cur_pg.execute("SELECT rs_id FROM snpediametadata;")
+    pg_rs_ids = {rs_id[0].upper() for rs_id in cur_pg.fetchall()}  # PostgreSQL rs_ids
 
-    rs_id_columns_batch = []
-    batch_size = 5000
+    logging.info('Fetching rs_ids from SQLite3...')
+    cur_sqlite.execute("SELECT DISTINCT rsid FROM genotypes_db;")
+    sqlite_rs_ids = {rs_id[0] for rs_id in cur_sqlite.fetchall()}  # SQLite3 rs_ids
 
-    for snp in snps:
-        rs_id = snp[0].lower()
-        rs_id_sqlite = rs_id.capitalize()  # Convert to SQLite format
+    unprocessed_rs_ids = sqlite_rs_ids.difference(pg_rs_ids)  # rs_ids in SQLite but not in PostgreSQL
+    logging.info(f'Unprocessed rs_ids count: {len(unprocessed_rs_ids)}')
 
-        try:
-            cur_sqlite.execute("SELECT * FROM columns_db WHERE rsid = ?", (rs_id_sqlite,))
-            rs_id_columns = cur_sqlite.fetchone()
-        except Exception as e:
-            logging.error(f'Error fetching from columns_db for {rs_id_sqlite}: {e}')
-            rs_id_columns = None
+    batch_size = 10
+    data_batch = []
+    for rs_id in unprocessed_rs_ids:
+        rs_id_pg = rs_id.lower()  # PostgreSQL rs_id
 
-        try:
-            cur_sqlite.execute("SELECT * FROM genotypes_db WHERE rsid = ?", (rs_id_sqlite,))
-            rs_id_genotypes = cur_sqlite.fetchall()
-        except Exception as e:
-            logging.error(f'Error fetching from genotypes_db for {rs_id_sqlite}: {e}')
-            rs_id_genotypes = None
+        logging.info(f'Fetching columns_db record for {rs_id}...')
+        cur_sqlite.execute("SELECT * FROM columns_db WHERE rsid = ?", (rs_id,))
+        rs_id_columns = cur_sqlite.fetchone()
+        logging.info(f'columns_db record for {rs_id}: {rs_id_columns}')
 
-        logging.info(f'columns_db record for {rs_id_sqlite}: {rs_id_columns}')
-        logging.info(f'genotypes_db records for {rs_id_sqlite}: {rs_id_genotypes}')
+        logging.info(f'Fetching genotypes_db records for {rs_id}...')
+        cur_sqlite.execute("SELECT * FROM genotypes_db WHERE rsid = ?", (rs_id,))
+        rs_id_genotypes = cur_sqlite.fetchall()
+        logging.info(f'genotypes_db records for {rs_id}: {rs_id_genotypes}')
 
         if rs_id_columns and rs_id_genotypes:
-            rs_id_genotype = ''.join([genotype[2] for genotype in rs_id_genotypes])
-            rs_id_data = (rs_id,) + rs_id_columns[1:] + (rs_id_genotype,)
-            rs_id_columns_batch.append(rs_id_data)
+            for rs_id_genotype in rs_id_genotypes:
+                rs_id_data = (rs_id_pg, rs_id_columns[1], rs_id_columns[3], rs_id_columns[4], rs_id_columns[5], rs_id_genotype[2], rs_id_genotype[3], rs_id_genotype[4], rs_id_genotype[5], rs_id_columns[2])
+                data_batch.append(rs_id_data)
 
-            if len(rs_id_columns_batch) >= batch_size:
-                logging.info(f'Batch size reached. Updating PostgreSQL.')
+            if len(data_batch) >= batch_size:
+                logging.info('Batch size reached. Updating PostgreSQL.')
                 try:
-                    batch_update(cur_pg, rs_id_columns_batch)
+                    batch_update(cur_pg, data_batch)
                     conn_pg.commit()
-                    rs_id_columns_batch.clear()
+                    logging.info(f'Successfully updated PostgreSQL with {len(data_batch)} records.')
+                    data_batch = []
                 except Exception as e:
-                    logging.error(f'Error updating PostgreSQL for batch: {e}')
-        else:
-            logging.warning(f'No matching SQLite records for {rs_id_sqlite}. Skipping...')
+                    logging.error(f'Error updating PostgreSQL: {e}')
+                    sys.exit(1)
 
-        try:
-            cur_pg.execute("INSERT INTO processed_snps (rs_id) VALUES (%s)", (rs_id,))
-            conn_pg.commit()
-        except Exception as e:
-            logging.error(f'Error updating processed_snps for {rs_id}: {e}')
 
-    if rs_id_columns_batch:
-        logging.info(f'Final batch. Updating PostgreSQL.')
+    if data_batch:  # process remaining records
+        logging.info(f'Updating PostgreSQL with remaining records.')
         try:
-            batch_update(cur_pg, rs_id_columns_batch)
+            batch_update(cur_pg, data_batch)
             conn_pg.commit()
+            logging.info(f'Successfully updated PostgreSQL with {len(data_batch)} records.')
         except Exception as e:
-            logging.error(f'Error updating PostgreSQL for final batch: {e}')
+            logging.error(f'Error updating PostgreSQL: {e}')
 
     cur_pg.close()
-    cur_sqlite.close()
     conn_pg.close()
+    cur_sqlite.close()
     conn_sqlite.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     process_snpedia_data()

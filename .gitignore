@@ -22,7 +22,8 @@ pipenv/
 
 # Data
 /data/SNPedia
-data/snp_database_backup_20230602_1200.sql
+/data/snp_database_backup_*.sql
+/data/snpedia_database_backup_*.db
 
 # Passwords
 /scripts/db_config.txt
