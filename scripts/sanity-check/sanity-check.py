@@ -15,7 +15,7 @@ conn = psycopg2.connect(
 
 cur = conn.cursor()
 
-tables = ["users", "files", "snps", "usersnps", "snpediametadata"]
+tables = ["users", "files", "snps", "usersnps", "snpediametadata", "observedphenotypes"]
 
 for table in tables:
     cur.execute(f"SELECT * FROM {table} ORDER BY RANDOM() LIMIT 30")

@@ -3,6 +3,27 @@ import sqlite3
 import logging
 import sys
 import time
+import locale
+
+def format_number_with_commas(number):
+    locale.setlocale(locale.LC_ALL, 'en_US')
+
+    formatted_number = locale.format_string("%d", number, grouping=True)
+    return formatted_number
+
+# unrelated debugging things, just 'cause it's convenient to have here
+def count_snpediametadata(cur_pg):
+    cur_pg.execute("SELECT COUNT(*) FROM users;")
+    count = cur_pg.fetchone()[0]
+    print(f'Count of users: {format_number_with_commas(count)}')
+
+    cur_pg.execute("SELECT COUNT(*) FROM snpediametadata;")
+    count = cur_pg.fetchone()[0]
+    print(f'Count of snpediametadata: {format_number_with_commas(count)}')
+
+    cur_pg.execute("SELECT COUNT(*) FROM observedphenotypes;")
+    count = cur_pg.fetchone()[0]
+    print(f'Count of observedphenotypes: {format_number_with_commas(count)}')
 
 logging.basicConfig(filename='batch_snpedia.log', level=logging.INFO)
 
@@ -25,13 +46,6 @@ def batch_update(cur_pg, data_batch):
         cur_pg.execute("ROLLBACK")
         logging.error(f'Error updating PostgreSQL: {e}')
         raise e
-
-
-
-def count_snpediametadata(cur_pg):
-    cur_pg.execute("SELECT COUNT(*) FROM snpediametadata;")
-    count = cur_pg.fetchone()[0]
-    print(f'Count of snpediametadata: {count}')
 
 
 def process_snpedia_data():

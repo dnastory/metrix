@@ -1,14 +1,18 @@
+import logging
 import time
 from bs4 import BeautifulSoup
 import requests
+import psycopg2
 from psycopg2 import sql
+
+logging.basicConfig(filename='observedphenotypes_setup.log', level=logging.INFO)
 
 def get_db_config():
     with open('./db_config.txt', 'r') as f:
         db_config = [line.strip() for line in f.readlines()]
         return db_config
 
-def scrape_opensnp(user_id, cur):
+def scrape_opensnp(user_id, cur, conn):
     """
     Scrape the user's OpenSNP page and insert the phenotypes into the database.
 
@@ -16,17 +20,26 @@ def scrape_opensnp(user_id, cur):
     """
     url = f"https://opensnp.org/users/{user_id}"
     
+    logging.info(f"Scraping phenotypes for user_id: {user_id}")
+    
     time.sleep(1)
 
-    response = requests.get(url)
+    try:
+        response = requests.get(url)
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Request error for user {user_id}: {e}")
+        return
+    
     soup = BeautifulSoup(response.text, 'html.parser')
     
     if "This user has not entered any phenotypes yet." in soup.text:
+        logging.info(f"No phenotypes found for user_id: {user_id}")
         return
     
     table = soup.find('table', {'class': 'table table-hover'})
 
     if table is None:
+        logging.warning(f"No phenotype table found for user_id: {user_id}")
         return
 
     insert_sql = sql.SQL(
@@ -43,30 +56,40 @@ def scrape_opensnp(user_id, cur):
         characteristic = cells[0].text.strip()
         variation = cells[1].text.strip()
 
-        try {
+        try:
             cur.execute(insert_sql, (user_id, characteristic, variation))
+            conn.commit()
+            logging.info(f"Inserted phenotype {characteristic} with variation {variation} for user {user_id}")
         except psycopg2.DatabaseError as e:
-            print(f"Database error on phenotype {characteristic} for user {user_id}: {e}")
+            logging.error(f"Database error on phenotype {characteristic} for user {user_id}: {e}")
             conn.rollback()
         except Exception as e:
-            print(f"Unknown error on phenotype {characteristic} for user {user_id}: {e}")
+            logging.error(f"Unknown error on phenotype {characteristic} for user {user_id}: {e}")
             conn.rollback()
+
 
 if __name__ == "__main__":
     db_name, db_user, db_password, db_host, db_port = get_db_config()
 
-    with psycopg2.connect(
+    conn = psycopg2.connect(
         dbname=db_name,
         user=db_user,
         password=db_password,
         host=db_host,
         port=db_port
-    ) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT user_id FROM Users")
-            for user_id, in cur.fetchall():
-                scrape_opensnp(user_id, cur)
+    )
+    
+    cur = conn.cursor()
+    cur.execute("SELECT user_id FROM Users")
+    user_ids = cur.fetchall()
+    for i, (user_id,) in enumerate(user_ids):
+        scrape_opensnp(user_id, cur, conn)
 
-            conn.commit()
+        if i % 10 == 0:  # Every 10 users, log the count
+            cur.execute("SELECT COUNT(*) FROM observedphenotypes")
+            count = cur.fetchone()[0]
+            logging.info(f"Processed {i} users, observedphenotypes table now has {count} rows.")
+    
+    conn.close()
 
-    print("Finished processing phenotypes 🙌")
+    logging.info("Finished processing phenotypes 🙌")
