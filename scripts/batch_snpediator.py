@@ -9,29 +9,35 @@ def get_db_config():
         db_config = [line.strip() for line in f.readlines()]
         return db_config
 
-def get_snps(cur):
-    cur.execute("SELECT rs_id FROM snps")
+def create_processed_snps_table(cur):
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS processed_snps (
+            rs_id TEXT PRIMARY KEY
+        )
+    """)
+
+def get_unprocessed_snps(cur):
+    cur.execute("""
+        SELECT snps.rs_id 
+        FROM snps
+        LEFT JOIN processed_snps 
+        ON snps.rs_id = processed_snps.rs_id
+        WHERE processed_snps.rs_id IS NULL
+    """)
     snps = cur.fetchall()
     return snps
 
-def write_checkpoint(rs_id):
-    with open('snpediator_checkpoint.txt', 'w') as f:
-        f.write(rs_id)
-
-def read_checkpoint():
-    try:
-        with open('snpediator_checkpoint.txt', 'r') as f:
-            rs_id = f.readline().strip()
-            return rs_id
-    except FileNotFoundError:
-        return None
+def mark_snp_as_processed(cur, rs_id):
+    cur.execute("""
+        INSERT INTO processed_snps (rs_id)
+        VALUES (%s)
+    """, (rs_id,))
 
 def run_snpediator(rs_id):
     command = f'snpediator -r {rs_id}'
     try:
         output = subprocess.check_output(command, shell=True, universal_newlines=True)
         logging.info(f'Successfully ran snpediator for rs_id {rs_id}')
-        write_checkpoint(rs_id)
     except subprocess.CalledProcessError as e:
         print(f'Failed to run snpediator for rs_id {rs_id}. Error: {e}')
         logging.error(f'Failed to run snpediator for rs_id {rs_id}. Error: {e}')
@@ -46,14 +52,10 @@ if __name__ == "__main__":
                             host=db_host,
                             port=db_port) as conn:
             with conn.cursor() as cur:
-                snps = get_snps(cur)
-                last_processed_snp = read_checkpoint()
-                start_from_checkpoint = last_processed_snp is not None
-
+                create_processed_snps_table(cur)
+                snps = get_unprocessed_snps(cur)
                 for rs_id, in snps:
-                    if start_from_checkpoint and rs_id != last_processed_snp:
-                        continue
-                    start_from_checkpoint = False
                     run_snpediator(rs_id)
+                    mark_snp_as_processed(cur, rs_id)
     except Exception as e:
         logging.error(f'Unexpected error: {e}')
