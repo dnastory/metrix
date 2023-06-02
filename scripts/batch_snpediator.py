@@ -31,7 +31,7 @@ def get_unprocessed_snps(cur, sqlite_conn):
             FROM columns_db
             UNION ALL
             SELECT lower(rsid)
-            FROM processed_snps_db
+            FROM not_found_snps_db
         """)
         sqlite_snps = set([row[0] for row in sqlite_cur.fetchall()])
 
@@ -48,22 +48,34 @@ def run_snpediator(rs_id, sqlite_conn):
     command = f'snpediator -r {rs_id}'
     try:
         output = subprocess.check_output(command, shell=True, universal_newlines=True)
-        status = 'successful'
-        logging.info(f'Successfully ran snpediator for rs_id {rs_id}')
+        if 'rsid not found' in output:
+            status = 'not found'
+            logging.warning(f'rsid not found for rs_id {rs_id}')
+            try:
+                sqlite_cur = sqlite_conn.cursor()
+                sqlite_cur.execute("""
+                    INSERT OR IGNORE INTO not_found_snps_db (rsid, status) VALUES (?, ?)
+                """, (rs_id, status))
+                sqlite_conn.commit()
+            except Exception as e:
+                logging.error(f'Error inserting not found SNP {rs_id}: {e}')
+        else:
+            status = 'successful'
+            logging.info(f'Successfully ran snpediator for rs_id {rs_id}')
     except subprocess.CalledProcessError as e:
         print(f'Failed to run snpediator for rs_id {rs_id}. Error: {e}')
         status = 'failed'
         logging.error(f'Failed to run snpediator for rs_id {rs_id}. Error: {e}')
-    
-    # After running SNPediator, insert the rs_id into processed_snps_db
+
+    # Update not_found_snps_db with status
     try:
         sqlite_cur = sqlite_conn.cursor()
         sqlite_cur.execute("""
-            INSERT OR IGNORE INTO processed_snps_db (rsid, status) VALUES (?, ?)
+            INSERT OR IGNORE INTO not_found_snps_db (rsid, status) VALUES (?, ?)
         """, (rs_id, status))
         sqlite_conn.commit()
     except Exception as e:
-        logging.error(f'Error inserting processed SNP {rs_id}: {e}')
+        logging.error(f'Error updating not_found_snps_db with status for SNP {rs_id}: {e}')
 
 if __name__ == "__main__":
     db_name, db_user, db_password, db_host, db_port = get_db_config()
@@ -76,8 +88,6 @@ if __name__ == "__main__":
                             port=db_port) as conn:
             with conn.cursor() as cur:
                 with sqlite3.connect('/home/ec2-user/.local/share/snpediator/snpediator_local.db') as sqlite_conn:
-                    # create_processed_table(sqlite_conn)
-                    # insert_processed_snps('/home/ec2-user/hackathon/metrix/scripts/snpediator.log', sqlite_conn)
                     unprocessed_snps = get_unprocessed_snps(cur, sqlite_conn)
                     for rs_id in unprocessed_snps:
                         run_snpediator(rs_id, sqlite_conn)
