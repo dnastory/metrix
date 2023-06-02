@@ -22,6 +22,7 @@ pipenv/
 
 # Data
 /data/SNPedia
+data/snp_database_backup_20230602_1200.sql
 
 # Passwords
 /scripts/db_config.txt
@@ -30,6 +31,7 @@ pipenv/
 /scripts/error_log.txt
 
 # Logs
-snpediator.log
+*.log
+/scripts/*.log
 /scripts/*checkpoint.txt
 
