@@ -25,6 +25,7 @@ pipenv/
 /data/snp_database_backup_*.sql
 /data/snpedia_database_backup_*.db
 /scripts/sanity-check/data
+/nomic/*.csv
 
 # Passwords
 /scripts/*_config.txt
@@ -36,4 +37,5 @@ pipenv/
 *.log
 /scripts/*.log
 /scripts/*checkpoint.txt
+/scripts/[a-t]
 

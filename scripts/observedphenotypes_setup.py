@@ -78,18 +78,36 @@ if __name__ == "__main__":
         host=db_host,
         port=db_port
     )
-    
+
     cur = conn.cursor()
-    cur.execute("SELECT user_id FROM users")
+
+    # Fetch the most recent created_at date from the users that are already in the observedphenotypes table
+    cur.execute("""
+        SELECT MAX(users.created_at) 
+        FROM users 
+        INNER JOIN observedphenotypes ON users.user_id = observedphenotypes.user_id
+    """)
+    most_recent_date = cur.fetchone()[0]
+
+    # Fetch the users that were created after the most recent user in observedphenotypes
+    cur.execute("""
+        SELECT user_id 
+        FROM users 
+        WHERE created_at > %s
+    """, (most_recent_date, ))
     user_ids = cur.fetchall()
+
+    print(f"Number of users created after the most recent user: {len(user_ids)}")
+
     for i, (user_id,) in enumerate(user_ids):
         scrape_opensnp(user_id, cur, conn)
 
         if i % 10 == 0:  # Every 10 users, log the count
             cur.execute("SELECT COUNT(*) FROM observedphenotypes")
             count = cur.fetchone()[0]
-            logging.info(f"Processed {i} users, observedphenotypes table now has {count} rows.")
+            print(f"Processed {i} users, observedphenotypes table now has {count} rows.")
     
     conn.close()
 
-    logging.info("Finished processing phenotypes 🙌")
+    print("Finished processing phenotypes 🙌")
+

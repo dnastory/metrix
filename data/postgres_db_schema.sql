@@ -109,6 +109,20 @@ CREATE TABLE public.processed_snps (
 ALTER TABLE public.processed_snps OWNER TO olivia;
 
 --
+-- Name: snpedia_unstructured; Type: TABLE; Schema: public; Owner: olivia
+--
+
+CREATE TABLE public.snpedia_unstructured (
+    rs_id text NOT NULL,
+    html text,
+    txt text,
+    llm_summary text
+);
+
+
+ALTER TABLE public.snpedia_unstructured OWNER TO olivia;
+
+--
 -- Name: snpediametadata; Type: TABLE; Schema: public; Owner: olivia
 --
 
@@ -288,6 +302,14 @@ ALTER TABLE ONLY public.observedphenotypes
 
 ALTER TABLE ONLY public.processed_snps
     ADD CONSTRAINT processed_snps_pkey PRIMARY KEY (rs_id);
+
+
+--
+-- Name: snpedia_unstructured snpedia_unstructured_pkey; Type: CONSTRAINT; Schema: public; Owner: olivia
+--
+
+ALTER TABLE ONLY public.snpedia_unstructured
+    ADD CONSTRAINT snpedia_unstructured_pkey PRIMARY KEY (rs_id);
 
 
 --

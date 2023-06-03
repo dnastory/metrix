@@ -33,6 +33,10 @@ def count_snpediametadata(cur_pg):
     count = cur_pg.fetchone()[0]
     print(f'Count of usersnps: {format_number_with_commas(count)}')
 
+    cur_pg.execute("SELECT COUNT(*) FROM snpedia_unstructured;")
+    count = cur_pg.fetchone()[0]
+    print(f'Count of snpedia_unstructured: {format_number_with_commas(count)}')
+
     print('')
 
 logging.basicConfig(filename='batch_snpedia.log', level=logging.INFO)
