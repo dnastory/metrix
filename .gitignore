@@ -27,7 +27,7 @@ pipenv/
 /scripts/sanity-check/data
 
 # Passwords
-/scripts/db_config.txt
+/scripts/*_config.txt
 
 # Errors
 /scripts/error_log.txt

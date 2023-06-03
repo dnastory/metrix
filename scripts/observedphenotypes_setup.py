@@ -80,7 +80,7 @@ if __name__ == "__main__":
     )
     
     cur = conn.cursor()
-    cur.execute("SELECT user_id FROM Users")
+    cur.execute("SELECT user_id FROM users")
     user_ids = cur.fetchall()
     for i, (user_id,) in enumerate(user_ids):
         scrape_opensnp(user_id, cur, conn)
