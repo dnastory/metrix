@@ -303,7 +303,7 @@ ALTER TABLE ONLY public.snpediametadata
 --
 
 ALTER TABLE ONLY public.snpediametadata
-    ADD CONSTRAINT snpediametadata_unique UNIQUE (rs_id, gene, "position", orientation, reference, magnitude, color, summary, chromosome, genotype, id);
+    ADD CONSTRAINT snpediametadata_unique UNIQUE (rs_id, gene, "position", orientation, reference, magnitude, color, summary, chromosome, genotype);
 
 
 --
@@ -320,6 +320,14 @@ ALTER TABLE ONLY public.snps
 
 ALTER TABLE ONLY public.snps
     ADD CONSTRAINT snps_rs_id_key UNIQUE (rs_id);
+
+
+--
+-- Name: observedphenotypes unique_user_id_characteristic; Type: CONSTRAINT; Schema: public; Owner: olivia
+--
+
+ALTER TABLE ONLY public.observedphenotypes
+    ADD CONSTRAINT unique_user_id_characteristic UNIQUE (user_id, characteristic);
 
 
 --

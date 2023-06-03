@@ -17,6 +17,10 @@ def count_snpediametadata(cur_pg):
     count = cur_pg.fetchone()[0]
     print(f'Count of users: {format_number_with_commas(count)}')
 
+    cur_pg.execute("SELECT COUNT(*) FROM snps;")
+    count = cur_pg.fetchone()[0]
+    print(f'Count of snps: {format_number_with_commas(count)}')
+
     cur_pg.execute("SELECT COUNT(*) FROM snpediametadata;")
     count = cur_pg.fetchone()[0]
     print(f'Count of snpediametadata: {format_number_with_commas(count)}')
@@ -24,6 +28,10 @@ def count_snpediametadata(cur_pg):
     cur_pg.execute("SELECT COUNT(*) FROM observedphenotypes;")
     count = cur_pg.fetchone()[0]
     print(f'Count of observedphenotypes: {format_number_with_commas(count)}')
+
+    cur_pg.execute("SELECT COUNT(*) FROM usersnps;")
+    count = cur_pg.fetchone()[0]
+    print(f'Count of usersnps: {format_number_with_commas(count)}')
 
 logging.basicConfig(filename='batch_snpedia.log', level=logging.INFO)
 
